@@ -4,4 +4,16 @@
     <string name="accessFragment">Access Fragment</string>
     <string name="facebook_app_id">951090025039966</string>
     <string name="fb_login_protocol_scheme">fb951090025039966</string>
+    <string name="app_label">Search</string>
+    <string name="login">Login</string>
+    <string-array name="planets_array">
+        <item>Mercury</item>
+        <item>Venus</item>
+        <item>Earth</item>
+        <item>Mars</item>
+        <item>Jupiter</item>
+        <item>Saturn</item>
+        <item>Uranus</item>
+        <item>Neptune</item>
+    </string-array>
 </resources>

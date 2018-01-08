@@ -1,15 +1,17 @@
 package com.example.prn763.remotehelper;
 
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.database.Cursor;
 import android.net.Uri;
-import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.nfc.Tag;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
+import android.telephony.SmsManager;
 import android.telephony.TelephonyManager;
 import android.text.format.Formatter;
 import android.util.Log;
@@ -17,11 +19,12 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
+import android.widget.BaseAdapter;
 import android.widget.Button;
-import android.widget.ListAdapter;
-import android.widget.ListView;
-import android.widget.Toast;
+
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static android.content.Context.WIFI_SERVICE;
 
@@ -36,10 +39,9 @@ import static android.content.Context.WIFI_SERVICE;
  */
 public class TabAccessProvider extends Fragment{
     private static final String TAG = "ACCESS_TAB";
-    private String ipList[] = {"123.323.12.121", "45.32.564.21", "565.212.32.442"};
-    private ListAdapter listAdapter = null;
+    private PhoneListCustomAdapter phoneListCustomAdapter;
     private View view = null;
-
+    private int mFeatureListPosition;
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
@@ -50,51 +52,80 @@ public class TabAccessProvider extends Fragment{
         View.OnClickListener onClickSendBtn = new View.OnClickListener(){
             @Override
             public void onClick(View view) {
-                sendMessage();
+                Intent i = new Intent(getContext(), Searchable.class);
+                i.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(i);
+                getActivity().finish();
+
             }
         };
         ViewHolder.getInstance().getSendButton(view).setOnClickListener(onClickSendBtn);
 
-        //set up list view for ip address
-        listAdapter = new ArrayAdapter(getContext(), R.layout.support_simple_spinner_dropdown_item, ipList);
-        ViewHolder.getInstance().getIpList(view).setAdapter(listAdapter);
-
-        AdapterView.OnItemClickListener onItemClick = new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                Log.d(TAG, "List item selected");
-                showDialogListView(view);
-            }
-        };
-        ViewHolder.getInstance().getIpList(view).setOnItemClickListener(onItemClick);
+        setupAddedContactList(view);
 
         return view;
     }
 
-    public void showDialogListView(View view){
-        String feature[] = {"ShutDown Phone", "Track Location", "Hacking"};
+    public void setupAddedContactList(View view){
+
+        List<String> phoneList = getDateBasePhoneList();
+
+        phoneListCustomAdapter = new PhoneListCustomAdapter(phoneList);
+
+        ViewHolder.getInstance().getIpList(view).setAdapter(phoneListCustomAdapter);
+    }
+
+    public List<String> getDateBasePhoneList(){
+        Log.d(TAG, "Launched PhoneListCustomAdapter");
+        List<String> phoneList = new ArrayList<>();
+        Cursor dbCursor = DBHandler.getInstance(getActivity()).getDataBase();
+        while (dbCursor.moveToNext())
+        {
+            String name=dbCursor.getString(1);
+            String phoneNumber = dbCursor.getString(2);
+            phoneList.add(name+":"+phoneNumber);
+            Log.d(TAG, name);
+        }
+        dbCursor.close();
+
+        return phoneList;
+    }
+
+    public void setPosition(int position){
+        mFeatureListPosition = position;
+    }
+    public int getPosition(){
+        return mFeatureListPosition;
+    }
+    public void showDialogListView(final String phoneNum, final String msg){
+
+        final String feature[] = {"ShutDown Phone", "Track Location", "Hacking", "Delete Contact"};
         //setup the listener to pop up list
-        DialogInterface.OnClickListener dialogListener = new DialogInterface.OnClickListener(){
+        DialogInterface.OnClickListener sendDialogListener = new DialogInterface.OnClickListener(){
             @Override
             public void onClick(DialogInterface dialog, int which){
-                Log.d(TAG, "U have handle the selected item");
+                sendMessage(phoneNum, feature[getPosition()]);
+            }
+        };
+
+        DialogInterface.OnClickListener listDialogListener = new DialogInterface.OnClickListener(){
+            @Override
+            public void onClick(DialogInterface dialog, int which){
+                setPosition(which);
             }
         };
 
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setCancelable(true);
         builder.setTitle("Choose Your Option:");
-        builder.setSingleChoiceItems(feature, 0, null);
-        builder.setPositiveButton("Send", dialogListener);
+        builder.setSingleChoiceItems(feature, 0, listDialogListener);
+        builder.setPositiveButton("Send", sendDialogListener);
         builder.show();
     }
 
-    public void sendMessage(){
-        Intent sendIntent = new Intent();
-        sendIntent.setAction(Intent.ACTION_SEND);
-        sendIntent.putExtra(Intent.EXTRA_TEXT, getWiFiIpAddress() + "/" + getPhoneNumber());
-        sendIntent.setType("text/plain");
-        startActivity(sendIntent);
+    public void sendMessage(String phoneNum, String Msg){
+        SmsManager sms = SmsManager.getDefault();
+        sms.sendTextMessage(phoneNum,null,Msg, null, null);
     }
 
     public String getWiFiIpAddress(){
@@ -113,5 +144,60 @@ public class TabAccessProvider extends Fragment{
         }
 
         return phoneNum;
+    }
+
+    public class PhoneListCustomAdapter extends BaseAdapter{
+        List<String> phoneList;
+
+        PhoneListCustomAdapter(List<String> list){
+            phoneList = list;
+        }
+
+        @Override
+        public int getCount() {
+            int num = 0;
+            if (phoneList != null){
+                num = phoneList.size();
+            }
+            return num;
+        }
+
+        @Override
+        public Object getItem(int i) {
+            return null;
+        }
+
+        @Override
+        public long getItemId(int i) {
+            return 0;
+        }
+
+        @Override
+        public View getView(int i, View view, ViewGroup viewGroup) {
+            view = getLayoutInflater().inflate(R.layout.contact_list_layout, viewGroup, false);
+
+            if(phoneList != null){
+                final String [] contactDetails = phoneList.get(i).split(":");
+
+                ViewHolder.getInstance().getUserContactName(view).setText(contactDetails[0]);
+                ViewHolder.getInstance().getUserContactNumber(view).setText(contactDetails[1]);
+
+
+                Button send = view.findViewById(R.id.addContact);
+                send.setText("Send");
+
+                View.OnClickListener onclick = new View.OnClickListener(){
+                    @Override
+                    public void onClick(View view) {
+                        showDialogListView(contactDetails[1].replaceAll("[ +()-]", ""), "Location");
+                    }
+                };
+                send.setOnClickListener(onclick);
+
+            }else{
+                    Log.d(TAG, "PhoneListCustomAdapter->getView() Error Occurred.");
+            }
+            return view;
+        }
     }
 }
